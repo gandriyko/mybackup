@@ -1,0 +1,12 @@
+#!/bin/bash
+
+USER='root'
+PASSWORD=''
+
+
+REMOTE_SERVER=''
+REMOTE_USER=''
+REMOTE_PASSWORD=''
+REMOTE_PATH='/db'
+
+

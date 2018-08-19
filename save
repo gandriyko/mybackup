@@ -1,0 +1,96 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# load variables from ~/.save
+if [ -f ~/.save ]; then
+    . ~/.save
+fi
+
+MB=/usr/local/bin/mybackup
+TMP="${TMP:-/tmp}"
+DESTINATION="${DESTINATION:-/srv/backup}"
+HOST="${HOST:-localhost}"
+USER="${USER:-root}"
+LIMIT="${LIMIT:-}"
+REMOTE=
+REMOTE_PATH="${REMOTE_PATH:-/}"
+DATABASE=
+VERBOSE=
+
+while [[ $# -gt 0 ]]
+do
+  case "$1" in
+    -u|--user)
+    USER="$2"
+    shift
+    ;;
+    -h|--host)
+    HOST="$2"
+    shift
+    ;;
+    -p)
+    echo "Please, input password"
+    read -s PASSWORD
+    ;;
+    -d|--database)
+    DATABASE="$2"
+    shift
+    ;;
+    -v)
+    VERBOSE=YES
+    ;;
+    -r)
+    REMOTE=YES
+    ;;
+    -P|--password)
+    PASSWORD="$2"
+    shift
+    ;;
+    -l)
+    LIMIT="$2"
+    shift
+    ;;
+
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    ;;
+  esac
+  shift
+done
+
+if [ -z "$DATABASE" ]; then
+cat << EOL
+$0 missed arguments
+-h hostname
+-p interactive password
+-P password
+-u username
+-v verbose
+-d database 
+-l limit rows
+-r copy to remote server
+
+EOL
+exit 1
+fi
+
+mkdir -p "$TMP/$DATABASE"
+cd "$TMP/$DATABASE"
+
+cmd="$MB -u $USER -d $DATABASE"
+[ -n "$PASSWORD" ] && cmd="$cmd -P $PASSWORD"
+[ -n "$LIMIT" ] && cmd="$cmd -l $LIMIT"
+[ -n "$VERBOSE" ] && cmd="$cmd -v"
+
+$cmd
+
+for file in *.tar.gz; do
+    if [ -n "$REMOTE" ] && [ -n "$REMOTE_SERVER" ]; then
+        sshpass -p "$REMOTE_PASSWORD" scp "$file" $REMOTE_USER@$REMOTE_SERVER:$REMOTE_PATH
+    fi
+    mv "$file" "$DESTINATION"
+done
+
+rm -rf "$TMP/$DATABASE"
+

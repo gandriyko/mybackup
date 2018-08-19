@@ -12,6 +12,7 @@ $0 missed arguments
 -u username
 -v verbose
 -d database 
+-l limit rows
 EOL
 exit 1
 fi
@@ -21,6 +22,7 @@ PASSWORD=
 HOST=localhost
 DATABASE=
 VERBOSE=
+LIMIT=
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]
@@ -49,6 +51,11 @@ do
     PASSWORD="$2"
     shift
     ;;
+    -l)
+    LIMIT="$2"
+    shift
+    ;;
+
     *)    # unknown option
     POSITIONAL+=("$1") # save it in an array for later
     ;;
@@ -71,26 +78,31 @@ backup_db() {
 
     [ -z $HOST ] && echo "missing host" && return 1
 
-    [ -n "$VERBOSE" ] && echo 'start backuping $DATABASE'
+    [ -n "$VERBOSE" ] && echo "Start backuping $DATABASE"
     
     [ ! -d $DATABASE ] && mkdir $DATABASE
-    
-    tables=`echo 'SHOW TABLES;' | mysql -u $USER --password=$PASSWORD $DATABASE`
+
+    sql="SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=\"$DATABASE\""
+    [ -n "$LIMIT" ] && sql="$sql AND TABLE_ROWS < $LIMIT"
+
+    tables=`echo "$sql" | mysql -u $USER --password=$PASSWORD $DATABASE`
     tables=( $tables )
 
     for table in ${tables[@]:1}; do
-    [ -n "$VERBOSE" ] && echo "Exporting $table..."
-    mysqldump -u $USER --password=$PASSWORD $DATABASE $table > $DATABASE/$table.sql
+        [ -n "$VERBOSE" ] && echo "Exporting $table..."
+        mysqldump -u $USER --password=$PASSWORD $DATABASE $table > $DATABASE/$table.sql
     done
 
-    NAME=$DATABASE-`date +%Y-%m-%d`.tar.gz
+    NAME="$DATABASE-`date +%w`.tar.gz"
 
     [ -n "$VERBOSE" ] && echo 'Start compression...'
 
-    tar cfz $NAME $DATABASE
-    rm -rf ./$DATABASE
+    GZIP='--fast' tar cfz "$NAME" "$DATABASE"
 
+    rm -rf ./$DATABASE
     [ -n "$VERBOSE" ] && echo 'Done!'
+    return 0
 }
 
 backup_db "$HOST" "$USER" "$PASSWORD" "$DATABASE" "$VERBOSE"
+
